@@ -4,7 +4,7 @@
 #include "adder.h"
 
 int main(int argc, const char* argv[]) {
-    StringH s;
+    StringH s = { 0 };
     strut_init(&s, 7);
     strut_appc(&s, "Hello");
     strut_appc(&s, " world!\n");
