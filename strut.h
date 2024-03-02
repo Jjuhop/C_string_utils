@@ -3,15 +3,17 @@
 
 /* --- HEADER PART --- */
 
+// bcap and ccap
+
 #ifndef _STRUT_SIZE_T
 #include <stddef.h>
 #define _STRUT_SIZE_T size_t
 #endif
 
 struct strut_heap_string {
-    _STRUT_SIZE_T len;
-    _STRUT_SIZE_T cap;
-    char* data;
+    _STRUT_SIZE_T  len;
+    _STRUT_SIZE_T bcap;
+    char*         data;
 };
 
 struct strut_string {
@@ -125,12 +127,12 @@ typedef StrutStr Str;
 
 /// @brief Initializes the string. Note that 0-initializing the structure is also a valid way to initialize it.
 /// @param s String to be initialized
-/// @param cap Capacity (in terms of chars before NULL) to be reserved exactly.
+/// @param ccap Capacity (in terms of chars before NULL) to be reserved exactly.
 /// @return 0 on success, non-0 on failure
 ///
 /// @note Calling this on a string that has been processed with other STRUT functions before is undefined
 /// behaviour and may result in memory leaks. However, calling this RIGHT AFTER strut_free is allowed.
-int strut_init(StrutStr* s, _STRUT_SIZE_T cap);
+int strut_init(StrutStr* s, _STRUT_SIZE_T ccap);
 
 /// @brief Frees the memory that was associated with the string (if any)
 /// @param s The string that is to be freed
@@ -138,11 +140,11 @@ int strut_init(StrutStr* s, _STRUT_SIZE_T cap);
 /// strut function that expects a string
 void strut_free(StrutStr* s);
 
-/// @brief Makes sure that the string can accomodate `bonusCap` more chars before needing to reallocate
+/// @brief Makes sure that the string can accomodate `bonus_ccap` more chars before needing to reallocate
 /// @param s The string that is to be operated on
-/// @param bonusCap The additional chars NOT including NULL char that we want to have room for.
+/// @param bonus_ccap The additional chars NOT including NULL char that we want to have room for.
 /// @return 0 on success, non-0 on failure
-int strut_ensure_additional_cap(StrutStr* s, _STRUT_SIZE_T bonusCap);
+int strut_ensure_additional_ccap(StrutStr* s, _STRUT_SIZE_T bonus_ccap);
 
 /// @brief Appends the contents of one string to another
 /// @param dst To which we append
@@ -159,7 +161,7 @@ int strut_appc(StrutStr* dst, const char* src);
 /// @brief Tells how many chars NOT including NULL termination char can be added without reallocation
 /// @param s The string to observe
 /// @return Number of capacity for chars left
-_STRUT_SIZE_T strut_get_remaining_cap(StrutStr* s);
+_STRUT_SIZE_T strut_get_remaining_ccap(StrutStr* s);
 
 /// @brief Gets the current length of the string
 /// @param s The string to observe
@@ -190,59 +192,57 @@ void _strut_strcpy(char* dst, const char* src);
 
 
 /* --- IMPLEMENTATION PART --- */
-#define STRUT_IMPLEMENTATION
 #ifdef STRUT_IMPLEMENTATION
 
-int strut_init(StrutStr* s, _STRUT_SIZE_T cap) {
-    // If this fits in stack, we don't need to allocate anything
-    if (cap > STRUT_MAX_STACKLEN) {
+int strut_init(StrutStr* s, _STRUT_SIZE_T ccap) {
+    // Allocate only if this cap doesn't fit on stack
+    if (ccap > STRUT_MAX_STACKLEN) {
         // Leave room for NULL char
-        s->hs.data = (char*)STRUT_MALLOC((cap + 1) * sizeof(char));
+        s->hs.data = (char*)STRUT_MALLOC((ccap + 1) * sizeof(char));
         if (!s->hs.data) return -1;
         s->hs.len = 0;
-        s->hs.cap = cap;
+        s->hs.bcap = (ccap + 1);
     }
     return 0;
 }
 
 void strut_free(StrutStr* s) {
-    if (STRUT_IS_HEAP(*s)) free(s->hs.data);
+    if (STRUT_IS_HEAP(*s)) STRUT_FREE(s->hs.data);
     s->hs.data = NULL;
     s->hs.len = (_STRUT_SIZE_T)0;
-    s->hs.cap = (_STRUT_SIZE_T)0;
+    s->hs.bcap = (_STRUT_SIZE_T)0;
 }
 
-int strut_ensure_additional_cap(StrutStr* s, _STRUT_SIZE_T bonusCap) {
-    if (strut_get_remaining_cap(s) >= bonusCap) {
+int strut_ensure_additional_ccap(StrutStr* s, _STRUT_SIZE_T bonus_ccap) {
+    if (strut_get_remaining_ccap(s) >= bonus_ccap) {
         // No need to do anything we already have enough cap
         return 0;
     }
     // Must do an allocation
     if (STRUT_IS_HEAP(*s)) {
-        _STRUT_SIZE_T newCap = s->hs.len + bonusCap + 1;   // Account for NULL
-        //STRUT_ASSERT(newCap <= STRUT_MAXCAP, "Strut max capacity exceeded!");    // TODO: Some fail message?
-        if (newCap > STRUT_MAXCAP) return -1;
-        char* newData = (char*)STRUT_MALLOC(newCap * sizeof(char));
-        if (!newData) return -1;
-        _strut_strcpy(newData, s->hs.data);
+        _STRUT_SIZE_T new_bcap = s->hs.len + bonus_ccap + 1;   // Account for NULL  
+        if (new_bcap > STRUT_MAXCAP) return -1; // TODO: Some fail message?
+        char* new_data = (char*)STRUT_MALLOC(new_bcap * sizeof(char));
+        if (!new_data) return -1;
+        _strut_strcpy(new_data, s->hs.data);
         // Something to free as well
         STRUT_FREE(s->hs.data);
-        s->hs.data = newData;
-        s->hs.cap = newCap;
+        s->hs.data = new_data;
+        s->hs.bcap = new_bcap;
         // len unchanged
         return 0;
     } else {
         _STRUT_SIZE_T len = _strut_strlen(s->ss);
-        _STRUT_SIZE_T newCap = len + bonusCap + 1;
-        if (newCap > STRUT_MAXCAP) return -1;
-        char* newData = (char*)STRUT_MALLOC(newCap * sizeof(char));
-        if (!newData) return -1;
-        _strut_strcpy(newData, s->ss);
+        _STRUT_SIZE_T new_bcap = len + bonus_ccap + 1;
+        if (new_bcap > STRUT_MAXCAP) return -1;
+        char* new_data = (char*)STRUT_MALLOC(new_bcap * sizeof(char));
+        if (!new_data) return -1;
+        _strut_strcpy(new_data, s->ss);
         // Transition from stack string to heap string
-        // Must zero out the _STRUT_CHECKBYTE_IND
-        s->hs.data = newData;
+        // Must zero out the _STRUT_CHECKBYTE_IND, should happen autom. as len is quite small
         s->hs.len = len;
-        s->hs.cap = newCap;
+        s->hs.bcap = new_bcap;
+        s->hs.data = new_data;
         STRUT_ASSERT(s->ss[_STRUT_CHECKBYTE_IND] == 0, "Something went wrong");
         return 0;
     }
@@ -256,9 +256,9 @@ int strut_appc(StrutStr* dst, const char* src) {
     return _strut_app_impl(dst, src, _strut_strlen(src));
 }
 
-_STRUT_SIZE_T strut_get_remaining_cap(StrutStr* s) {
+_STRUT_SIZE_T strut_get_remaining_ccap(StrutStr* s) {
     if (STRUT_IS_HEAP(*s)) {
-        return s->hs.cap - s->hs.len - 1;
+        return s->hs.bcap - s->hs.len - 1;
     } else {
         return STRUT_MAX_STACKLEN - _strut_strlen(s->ss);
     }
@@ -280,21 +280,6 @@ const char* strut_get_cstr(StrutStr* s) {
     }
 }
 
-// int strut_appc(StringH* dst, const char* src) {
-//     _STRUT_SIZE_T src_len = strlen(src);
-//     if (dst->cap - dst->len < src_len) {
-//         _STRUT_SIZE_T new_cap = dst->len + src_len + 1;
-//         char* new_alloc = (char*)realloc(dst->data, new_cap);
-//         if (!new_alloc) return -1;
-//         dst->data = new_alloc;
-//         dst->cap = new_cap;
-//     }
-//     strcpy(dst->data + dst->len, src);
-//     dst->len += src_len;
-//     return 0;
-// }
-
-
 void _strut_validate_mem_layout() {
     StrutStr s = {0};
     for (_STRUT_SIZE_T i = 0; i < STRUT_MAX_STACKLEN; i++) {
@@ -302,19 +287,21 @@ void _strut_validate_mem_layout() {
     }
     s.ss[_STRUT_CHECKBYTE_IND] = (char)0xff;
     STRUT_PRINT("******* VALIDATING STRUT MEMORY LAYOUT *******\n");
+    STRUT_PRINT(" - Size of heap string struct: %zu\n", sizeof(struct strut_heap_string));
+    STRUT_PRINT(" - Size of combined string:    %zu\n", sizeof(StrutStr));
     STRUT_PRINT("Stack char array byte values (indices from 0 to max):\n");
     for (_STRUT_SIZE_T i = 0; i < STRUT_MAX_STACKLEN; i++) {
         STRUT_PRINT("%02hhX ", s.ss[i]);
     }
-    char highlightOffset[3 * _STRUT_CHECKBYTE_IND + 2] = {0};
-    highlightOffset[0] = '\n';
+    char highlight_offset[3 * _STRUT_CHECKBYTE_IND + 2] = {0};
+    highlight_offset[0] = '\n';
     for (_STRUT_SIZE_T i = 1; i < 3 * _STRUT_CHECKBYTE_IND + 1; i++) {
-        highlightOffset[i] = ' ';
+        highlight_offset[i] = ' ';
     }
-    STRUT_PRINT("%s", highlightOffset);
-    STRUT_PRINT("^^\nHeap string components (len, cap, ptr)\n");
+    STRUT_PRINT("%s", highlight_offset);
+    STRUT_PRINT("^^\nHeap string components (len, bcap, ptr)\n");
     const char* fmtstr = sizeof(_STRUT_SIZE_T) == 8 ? "%016zX, %016zX, %p\n" : "%08zX, %08zX, %p\n";
-    STRUT_PRINT(fmtstr, s.hs.len, s.hs.cap, s.hs.data);
+    STRUT_PRINT(fmtstr, s.hs.len, s.hs.bcap, s.hs.data);
     STRUT_PRINT("^^\n");
     STRUT_PRINT("The highest byte of heap len should match with %zuth byte in stack array side\n", _STRUT_CHECKBYTE_IND);
     if ((char)(s.hs.len >> ((sizeof(_STRUT_SIZE_T) - 1) * 8)) == s.ss[_STRUT_CHECKBYTE_IND]) {
@@ -337,7 +324,7 @@ void _strut_debug_str(StrutStr* s) {
     }
     STRUT_PRINT("\n---\nHeap side values:\n");
     STRUT_PRINT("\tLength:   %zu\n", s->hs.len);
-    STRUT_PRINT("\tCapacity: %zu\n", s->hs.cap);
+    STRUT_PRINT("\tCapacity: %zu\n", s->hs.bcap);
     STRUT_PRINT("\tData ptr: %p\n", s->hs.data);
     STRUT_PRINT("The string should be located in %s\n", STRUT_IS_HEAP(*s) ? "HEAP" : "STACK");
     STRUT_PRINT("*********************************\n");
@@ -346,7 +333,7 @@ void _strut_debug_str(StrutStr* s) {
 /////// Internal implementations on some c string functions ///////
 
 int _strut_app_impl(StrutStr* dst, const char* src_data, _STRUT_SIZE_T src_len) {
-    int err = strut_ensure_additional_cap(dst, src_len);
+    int err = strut_ensure_additional_ccap(dst, src_len);
     if (err) return -1;
     // Ok to append
     if (STRUT_IS_HEAP(*dst)) {
