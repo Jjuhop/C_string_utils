@@ -187,6 +187,7 @@ int _strut_app_impl(StrutStr* dst, const char* src_data, _STRUT_SIZE_T src_len);
 
 _STRUT_SIZE_T _strut_strlen(const char* s);
 void _strut_strcpy(char* dst, const char* src);
+int _strut_strcmp(const char* a, const char* b);
 
 #endif  // _STRUT_H
 
@@ -356,6 +357,14 @@ _STRUT_SIZE_T _strut_strlen(const char* s) {
 void _strut_strcpy(char* dst, const char* src) {
     while (*src) { *dst++ = *src++; }
     *dst = '\0';
+}
+
+int _strut_strcmp(const char* a, const char* b) {
+    int diff = 0;
+    do {
+        diff = *a - *b;
+    } while (*a++ && *b++ && diff == 0);
+    return diff;
 }
 
 #endif // STRUT_IMPLEMENTATION
