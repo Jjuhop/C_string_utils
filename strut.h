@@ -39,10 +39,10 @@ typedef StrutStr Str;
      This follows from the other points.
   1. If the heap-side data pointer is NULL, the struct is a short
      STACK string.
-  2. If the heap-side data pointer is non-NULL
-     a) AND the highest byte of the heap-side length field is 0
+  2. If the heap-side data pointer is non-NULL ...
+     a) ... AND the highest byte of the heap-side length field is 0
         (data[7] of the stack-side), the struct is a HEAP string.
-     b) AND the highest byte of the heap-side length field is not
+     b) ... AND the highest byte of the heap-side length field is not
         0 (data[7] of the stack-side), the struct is a STACK string
 
 
@@ -89,7 +89,7 @@ typedef StrutStr Str;
 
 // We cannot use the last byte of len due to logic reasons
 // Note that the cap maximum is 1 more to account for the NULL termination char
-// Therefore cap may need it's final byte in a rare case
+// Therefore cap may need its final byte in a rare case
 #define STRUT_MAXLEN (1L << ((sizeof(_STRUT_SIZE_T) - 1) * 8) - 1)
 #define STRUT_MAXCAP (STRUT_MAXLEN + 1)
 #define STRUT_MAX_STACKLEN (sizeof(struct strut_heap_string) - 1)
@@ -146,17 +146,17 @@ void strut_free(StrutStr* s);
 /// @return 0 on success, non-0 on failure
 int strut_ensure_additional_ccap(StrutStr* s, _STRUT_SIZE_T bonus_ccap);
 
-/// @brief Appends the contents of one string to another
-/// @param dst To which we append
-/// @param src From which we append
-/// @return 0 on success, non-0 on failure
-int strut_app(StrutStr* dst, StrutStr* src);
-
 /// @brief Appends the contents of a C string to this string
 /// @param dst To which we append
 /// @param src From which we append
 /// @return 0 on success, non-0 on failure
 int strut_appc(StrutStr* dst, const char* src);
+
+/// @brief Appends the contents of one string to another
+/// @param dst To which we append
+/// @param src From which we append
+/// @return 0 on success, non-0 on failure
+int strut_app(StrutStr* dst, StrutStr* src);
 
 /// @brief Tells how many chars NOT including NULL termination char can be added without reallocation
 /// @param s The string to observe
@@ -249,12 +249,12 @@ int strut_ensure_additional_ccap(StrutStr* s, _STRUT_SIZE_T bonus_ccap) {
     }
 }
 
-int strut_app(StrutStr* dst, StrutStr* src) {
-    return _strut_app_impl(dst, strut_get_cstr(src), strut_get_len(src));
-}
-
 int strut_appc(StrutStr* dst, const char* src) {
     return _strut_app_impl(dst, src, _strut_strlen(src));
+}
+
+int strut_app(StrutStr* dst, StrutStr* src) {
+    return _strut_app_impl(dst, strut_get_cstr(src), strut_get_len(src));
 }
 
 _STRUT_SIZE_T strut_get_remaining_ccap(StrutStr* s) {
@@ -342,7 +342,7 @@ int _strut_app_impl(StrutStr* dst, const char* src_data, _STRUT_SIZE_T src_len) 
         dst->hs.len += src_len;
     } else {
         char* dst_ptr = dst->ss;
-        while (*dst_ptr++) { }
+        while (*dst_ptr) { dst_ptr++; }
         _strut_strcpy(dst_ptr, src_data);
     }
     return 0;

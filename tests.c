@@ -4,10 +4,16 @@
 #include "strut.h"
 
 #include <stdio.h>
+#include <string.h>
 
 void perr(const char* emsg) {
     fprintf(stderr, "\tFAIL: %s\n", emsg);
 }
+
+#define ASSERT_STACK(s) if(STRUT_IS_HEAP(s)) { fprintf(stderr, "\tFAIL (line %d): String should be in STACK\n", __LINE__); _strut_debug_str(&s); strut_free(&s); return -1; }
+#define ASSERT_HEAP(s) if(!STRUT_IS_HEAP(s)) { fprintf(stderr, "\tFAIL (line %d): String should be in HEAP\n", __LINE__); _strut_debug_str(&s); strut_free(&s); return -1; }
+#define ASSERT_COND(cond, msg) if(!(cond)) { fprintf(stderr, "\tFAIL (line %d): %s\n", __LINE__, msg); _strut_debug_str(&s); strut_free(&s); return -1; }
+#define ASSERT_COND_S(cond, msg, s) if(!(cond)) { fprintf(stderr, "\tFAIL (line %d): %s\n", __LINE__, msg); _strut_debug_str(&s); strut_free(&s); return -1; }
 
 int run_all_tests()
 {
@@ -30,16 +36,16 @@ int run_all_tests()
 
     int err = 0;
 
-    printf("TESTING BASIC FUNCTIONS\n");
-    for (size_t i = 0; i < (sizeof(test_funcs)/sizeof(test_funcs[0])); i++) {
-        err = test_funcs[i]();
+    printf("TESTING INTERNAL FUNCTIONS\n");
+    for (size_t i = 0; i < (sizeof(internal_test_funcs)/sizeof(internal_test_funcs[0])); i++) {
+        err = internal_test_funcs[i]();
         if (err) break;
         printf("\tOK\n");
     }
 
-    printf("TESTING INTERNAL FUNCTIONS\n");
-    for (size_t i = 0; i < (sizeof(internal_test_funcs)/sizeof(internal_test_funcs[0])); i++) {
-        err = internal_test_funcs[i]();
+    printf("TESTING BASIC FUNCTIONS\n");
+    for (size_t i = 0; i < (sizeof(test_funcs)/sizeof(test_funcs[0])); i++) {
+        err = test_funcs[i]();
         if (err) break;
         printf("\tOK\n");
     }
@@ -50,25 +56,16 @@ int run_all_tests()
 int test_init_free()
 {
     printf("Testing init & free\n");
-    StrutStr s1 = {0};
-    if (STRUT_IS_HEAP(s1)) {
-        perr("Zero-init viewed as HEAP string");
-        _strut_debug_str(&s1);
-        return -1;
-    }
-    strut_init(&s1, STRUT_MAX_STACKLEN);
-    if (STRUT_IS_HEAP(s1)) {
-        perr("Small cap init makes it HEAP string");
-        _strut_debug_str(&s1);
-        return -1;
-    }
-    strut_init(&s1, 256);
-    if (!STRUT_IS_HEAP(s1)) {
-        perr("Not on heap despite large init");
-        _strut_debug_str(&s1);
-        return -1;
-    }
-    strut_free(&s1);
+    StrutStr s = {0};
+    ASSERT_STACK(s);
+
+    strut_init(&s, STRUT_MAX_STACKLEN);
+    ASSERT_STACK(s);
+
+    strut_init(&s, STRUT_MAX_STACKLEN + 64);
+    ASSERT_HEAP(s);
+
+    strut_free(&s);
     return 0;
 }
 
@@ -77,61 +74,118 @@ int test_ensure_additional_ccap()
     printf("Testing ensure_additional_ccap\n");
     StrutStr s = {0};
     strut_ensure_additional_ccap(&s, STRUT_MAX_STACKLEN);
-    if (STRUT_IS_HEAP(s)) {
-        perr("Ensure cap that fits in stack moves the string to heap");
-        _strut_debug_str(&s);
-        return -1;
-    }
+    ASSERT_STACK(s);
+
     const char* cstr = "Hello World!";
-    _strut_strcpy(s.ss, cstr);
-    strut_ensure_additional_ccap(&s, STRUT_MAX_STACKLEN - _strut_strlen(cstr));
-    if (STRUT_IS_HEAP(s)) {
-        perr("Ensure cap that fits in stack after adding stuff moves the string to heap");
-        _strut_debug_str(&s);
-        return -1;
-    }
+    strcpy(s.ss, cstr);
+    strut_ensure_additional_ccap(&s, STRUT_MAX_STACKLEN - strlen(cstr));
+    ASSERT_STACK(s);
+    
     strut_ensure_additional_ccap(&s, STRUT_MAX_STACKLEN);
-    if (!STRUT_IS_HEAP(s)) {
-        perr("Ensure cap does not move the string to heap when needed");
-        _strut_debug_str(&s);
-        return -1;
-    }
-    if (_strut_strcmp(strut_get_cstr(&s), cstr) != 0) {
-        perr("String does not have the correct contents");
-        _strut_debug_str(&s);
-        return -1;
-    }
+    ASSERT_HEAP(s);
+    ASSERT_COND(strcmp(s.hs.data, cstr) == 0, "String does not have the correct contents");
+
+    strut_free(&s);
+    return 0;
+}
+
+int test_appendc()
+{
+    printf("Testing appendc\n");
+    StrutStr s = {0};
+    const char* cs1 = "Hello ";
+    const char* cs2 = "World!";
+    strut_appc(&s, cs1);
+    ASSERT_STACK(s);
+    ASSERT_COND(strcmp(s.ss, cs1) == 0, "String had incorrect contents, should have \"Hello \"");
+
+    strut_appc(&s, cs2);
+    ASSERT_COND(strcmp(strut_get_cstr(&s), "Hello World!") == 0, "String had incorrect contents, should have \"Hello World!\"");
+
     strut_free(&s);
     return 0;
 }
 
 int test_append()
 {
-    printf("[TODO] Testing append\n");
-    return 0;
-}
+    printf("Testing append\n");
+    StrutStr s = {0};
+    StrutStr s1 = {0};
+    strut_appc(&s1, "Hello ");
+    StrutStr s2 = {0};
+    strut_appc(&s2, "World!");
 
-int test_appendc()
-{
-    printf("[TODO] Testing appendc\n");
+    strut_app(&s, &s1);
+    ASSERT_STACK(s);
+    ASSERT_COND(strcmp(strut_get_cstr(&s), "Hello ") == 0, "String had incorrect contents, should have \"Hello \"");
+
+    strut_app(&s, &s2);
+    ASSERT_COND(strcmp(strut_get_cstr(&s), "Hello World!") == 0, "String had incorrect contents, should have \"Hello World!\"");
+
+    strut_free(&s);
+    strut_free(&s1);
+    strut_free(&s2);
     return 0;
 }
 
 int test_get_remaining_ccap()
 {
-    printf("[TODO] Testing get_remaining_ccap\n");
+    printf("Testing get_remaining_ccap\n");
+    StrutStr s = {0};
+    const char* cs1 = "Hello ";
+    const char* cs2 = "World!";
+    strut_appc(&s, cs1);
+    ASSERT_STACK(s);
+    ASSERT_COND(strut_get_remaining_ccap(&s) == STRUT_MAX_STACKLEN - strut_get_len(&s), "Incorrect ccap left");
+
+    strut_appc(&s, cs2);
+    ASSERT_STACK(s);
+    ASSERT_COND(strut_get_remaining_ccap(&s) == STRUT_MAX_STACKLEN - strut_get_len(&s), "Incorrect ccap left");
+
+    strut_free(&s);
     return 0;
 }
 
 int test_get_len()
 {
-    printf("[TODO] Testing get_len\n");
+    printf("Testing get_len\n");
+    StrutStr s = {0};
+    const char* cs1 = "Hello ";
+    const char* cs2 = "World!";
+    strut_appc(&s, cs1);
+    ASSERT_COND(strut_get_len(&s) == strlen(cs1), "Incorrect length");
+
+    strut_appc(&s, cs2);
+    ASSERT_COND(strut_get_len(&s) == strlen(cs1) + strlen(cs2), "Incorrect length");
+
+    strut_free(&s);
     return 0;
 }
 
 int test_get_cstr()
 {
-    printf("[TODO] Testing get_cstr\n");
+    printf("Testing get_cstr\n");
+    StrutStr s = {0};
+    ASSERT_COND(strut_get_cstr(&s) == (const char*)&s, "Zero-init String ptr should be the struct itself");
+
+    strut_appc(&s, "abc");
+    ASSERT_STACK(s);
+    ASSERT_COND(strut_get_cstr(&s) == (const char*)&s, "Small String ptr should be the struct itself");
+
+    size_t big_len = 2 * STRUT_MAX_STACKLEN;
+    char buf[big_len + 1];
+    const char* stuff = "asdfghjkl";
+    size_t l = strlen(stuff);
+    for (size_t i = 0; i < big_len; i++) {
+        buf[i] = stuff[i % l];
+    }
+    buf[big_len] = 0;
+    strut_appc(&s, buf);
+    ASSERT_HEAP(s);
+    ASSERT_COND(strut_get_cstr(&s) == s.hs.data, "Large String ptr should be the heap data ptr");
+    ASSERT_COND(strcmp(s.hs.data + 3, buf) == 0, "Heap of string has wrong content");
+
+    strut_free(&s);
     return 0;
 }
 
