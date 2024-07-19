@@ -3,7 +3,7 @@
 ## Very much work in progress still!
 
 Makes handling dynamic strings in C (at least somewhat) easy.
-Also includes **small string optimization**.
+Also includes **small string optimization** and should be relatively easily detachable from the standard library.
 
 For using the library:
 ```
