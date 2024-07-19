@@ -4,6 +4,7 @@
 int run_all_tests();
 
 int test_init_free();
+int test_clear();
 int test_ensure_additional_ccap();
 int test_appendc();
 int test_append();

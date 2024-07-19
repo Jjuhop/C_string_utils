@@ -19,6 +19,7 @@ int run_all_tests()
 {
     int (*test_funcs[])() = {
         test_init_free,
+        test_clear,
         test_ensure_additional_ccap,
         test_append,
         test_appendc,
@@ -64,6 +65,35 @@ int test_init_free()
 
     strut_init(&s, STRUT_MAX_STACKLEN + 64);
     ASSERT_HEAP(s);
+
+    strut_free(&s);
+    return 0;
+}
+
+int test_clear()
+{
+    printf("Testing clear\n");
+    StrutStr s = {0};
+    ASSERT_STACK(s);
+
+    strut_appc(&s, "abc");
+    ASSERT_COND(strut_get_len(&s) != 0, "Len must be non-0 after appending");
+    strut_clear(&s);
+    ASSERT_COND(strut_get_len(&s) == 0, "Len must be 0 after clearing");
+
+    size_t big_len = 2 * STRUT_MAX_STACKLEN;
+    char buf[big_len + 1];
+    const char* stuff = "asdfghjkl";
+    size_t l = strlen(stuff);
+    for (size_t i = 0; i < big_len; i++) {
+        buf[i] = stuff[i % l];
+    }
+    buf[big_len] = 0;
+    strut_appc(&s, buf);
+    ASSERT_HEAP(s);
+    ASSERT_COND(strut_get_len(&s) != 0, "Len must be non-0 after appending");
+    strut_clear(&s);
+    ASSERT_COND(strut_get_len(&s) == 0, "Len must be 0 after clearing");
 
     strut_free(&s);
     return 0;

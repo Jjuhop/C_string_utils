@@ -140,6 +140,10 @@ int strut_init(StrutStr* s, _STRUT_SIZE_T ccap);
 /// strut function that expects a string
 void strut_free(StrutStr* s);
 
+/// @brief Clear the contents setting size to 0, but doesn't free memory
+/// @param s The string that is to be cleared
+void strut_clear(StrutStr* s);
+
 /// @brief Makes sure that the string can accomodate `bonus_ccap` more chars before needing to reallocate
 /// @param s The string that is to be operated on
 /// @param bonus_ccap The additional chars NOT including NULL char that we want to have room for.
@@ -212,6 +216,18 @@ void strut_free(StrutStr* s) {
     s->hs.data = NULL;
     s->hs.len = (_STRUT_SIZE_T)0;
     s->hs.bcap = (_STRUT_SIZE_T)0;
+}
+
+void strut_clear(StrutStr *s) {
+    if (STRUT_IS_HEAP(*s)) {
+        s->hs.len = (_STRUT_SIZE_T)0;
+        STRUT_ASSERT(s->hs.data, "Heap str mush have non-NULL ptr");
+        if (s->hs.bcap > 0) s->hs.data[0] = 0;
+    } else {
+        s->hs.data = NULL;
+        s->hs.len = (_STRUT_SIZE_T)0;
+        s->hs.bcap = (_STRUT_SIZE_T)0;
+    }
 }
 
 int strut_ensure_additional_ccap(StrutStr* s, _STRUT_SIZE_T bonus_ccap) {
